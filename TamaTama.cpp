@@ -5,6 +5,9 @@
 #include <ctime>
 #include <cstdlib>
 
+const int WINDOW_WIDTH = 800;
+const int WINDOW_HEIGHT = 450;
+
 class Pet {
 private:
 	int hunger;         // 0-100 (0: full, 100: starving)
@@ -137,74 +140,49 @@ private:
 	sf::Font font;
 	sf::Texture petTextures[7]; // Different mood textures
 	sf::Sprite petSprite;
-	sf::RectangleShape statusBars[5];
+	sf::Texture heartTexture;
+	sf::Sprite hearts[5][5]; // 5 stats, each max 5 hearts
 	sf::Text statusTexts[5];
 	sf::Text nameAgeText;
 	sf::Text moodText;
 	sf::RectangleShape buttons[5];
 	sf::Text buttonLabels[5];
 
-	enum PetMood {
-		NORMAL = 0,
-		HAPPY = 1,
-		SAD = 2,
-		HUNGRY = 3,
-		TIRED = 4,
-		DIRTY = 5,
-		DEAD = 6
-	};
+	enum PetMood { NORMAL, HAPPY, SAD, HUNGRY, TIRED, DIRTY, DEAD };
 
 	void loadAssets() {
-		font.loadFromFile("Assets/Fonts/arial.ttf"); // Make sure to have a font file
+		if (!font.loadFromFile("Assets/Fonts/arial.ttf")) {
+			std::cerr << "Failed to load font!" << std::endl;
+			throw "Cannot load arial.tff";
+		}
 
+		if (!heartTexture.loadFromFile("Assets/Textures/heart.png")) {
+			std::cerr << "Failed to load heart texture!" << std::endl;
+			throw "Cannot load HeartFull.png";
+		}
 
-		// TODO other texture mood
-		if (!petTextures[0].loadFromFile("Assets/Textures/nyancat2.png")) {
-			// Error handling if the cat texture fails to load
+		if (!petTextures[0].loadFromFile("Assets/Textures/nyancat.png")) {
 			std::cerr << "Failed to load cat texture!" << std::endl;
 			throw "Cannot load nyancat.png";
 		}
 
 		petSprite.setTexture(petTextures[0]);
 
-		// Set origin to center of sprite
+		// Set origin to center of pet sprite
 		sf::FloatRect spriteBounds = petSprite.getLocalBounds();
 		petSprite.setOrigin(spriteBounds.width / 2.0f, spriteBounds.height / 2.0f);
 
 		// Set position to center of the window
-		petSprite.setPosition(800 / 2.0f, 450 / 2.0f);
+		petSprite.setPosition(WINDOW_WIDTH / 2.0f, WINDOW_HEIGHT / 2.0f);
 
-		// Status bars
+		// Status heart
 		std::string statusNames[5] = { "Hunger", "Happiness", "Energy", "Cleanliness", "Health" };
-		sf::Color statusColors[5] = {
-			sf::Color(255, 165, 0),  // Orange for hunger
-			sf::Color(255, 192, 203), // Pink for happiness
-			sf::Color(0, 191, 255),   // Blue for energy
-			sf::Color(124, 252, 0),   // Green for cleanliness
-			sf::Color(220, 20, 60)    // Red for health
-		};
-
-		// Bottom bar 
-		/*for (int i = 0; i < 5; i++) {
-			statusBars[i].setSize(sf::Vector2f(200, 20));
-			statusBars[i].setFillColor(statusColors[i]);
-			statusBars[i].setPosition(550, 100 + i * 30);
-
-			statusTexts[i].setFont(font);
-			statusTexts[i].setString(statusNames[i]);
-			statusTexts[i].setCharacterSize(16);
-			statusTexts[i].setFillColor(sf::Color::Black);
-			statusTexts[i].setPosition(430, 100 + i * 30);
-		}*/
-
-		// Top bar
-		float startX = 80;         // Starting X position
-		float startY = 20;         // Y position for labels
-		float barY = 40;         // Y position for bars
-		float spacing = 130;       // Horizontal spacing between each status
+		float startX = 80;
+		float spacing = 140;
+		float labelY = 20;
+		float heartsY = 40;
 
 		for (int i = 0; i < 5; i++) {
-			// Set status text (label)
 			statusTexts[i].setFont(font);
 			statusTexts[i].setString(statusNames[i]);
 			statusTexts[i].setCharacterSize(14);
@@ -213,81 +191,72 @@ private:
 			// Center text over the bar
 			sf::FloatRect textBounds = statusTexts[i].getLocalBounds();
 			float labelX = startX + i * spacing + (100 - textBounds.width) / 2;
-			statusTexts[i].setPosition(labelX, startY);
+			statusTexts[i].setPosition(labelX, labelY);
 
-			// Set status bar
-			statusBars[i].setSize(sf::Vector2f(100, 16)); // Shorter bar
-			statusBars[i].setFillColor(statusColors[i]);
-			statusBars[i].setPosition(startX + i * spacing, barY);
+			for (int j = 0; j < 5; j++) {
+				hearts[i][j].setTexture(heartTexture);
+				hearts[i][j].setScale(0.04f, 0.04f); // Adjust based on heart image
+				hearts[i][j].setPosition(startX + i * spacing + j * 21, heartsY);
+			}
 		}
 
-		// Name and age text
 		nameAgeText.setFont(font);
 		nameAgeText.setCharacterSize(20);
 		nameAgeText.setFillColor(sf::Color::Black);
-		nameAgeText.setPosition(310, 100);
+		nameAgeText.setPosition(320, 150);
 
-		// Mood text
 		moodText.setFont(font);
 		moodText.setCharacterSize(20);
 		moodText.setFillColor(sf::Color::Black);
-		moodText.setPosition(340, 280);
+		moodText.setPosition(340, 290);
 
-		// Action buttons
 		std::string buttonTexts[5] = { "Feed", "Play", "Sleep", "Clean", "Medicine" };
 		for (int i = 0; i < 5; i++) {
 			buttons[i].setSize(sf::Vector2f(120, 40));
 			buttons[i].setFillColor(sf::Color(200, 200, 200));
 			buttons[i].setOutlineThickness(2);
 			buttons[i].setOutlineColor(sf::Color::Black);
-			buttons[i].setPosition(100 + i * 130, 350);
+			buttons[i].setPosition(80 + i * 130, 350);
 
 			buttonLabels[i].setFont(font);
 			buttonLabels[i].setString(buttonTexts[i]);
 			buttonLabels[i].setCharacterSize(16);
 			buttonLabels[i].setFillColor(sf::Color::Black);
-			// Center text on button
 			sf::FloatRect textBounds = buttonLabels[i].getLocalBounds();
 			buttonLabels[i].setPosition(
-				100 + i * 130 + (120 - textBounds.width) / 2,
-				350 + (40 - textBounds.height) / 2 - 5  // -5 for visual centering
+				80 + i * 130 + (120 - textBounds.width) / 2,
+				350 + (40 - textBounds.height) / 2 - 5
 			);
 		}
 	}
 
 	void updateUI() {
-		// Update status bars
-		statusBars[0].setSize(sf::Vector2f(2 * (100 - pet.getHunger()), 20)); // Invert hunger for display
-		statusBars[1].setSize(sf::Vector2f(2 * pet.getHappiness(), 20));
-		statusBars[2].setSize(sf::Vector2f(2 * pet.getEnergy(), 20));
-		statusBars[3].setSize(sf::Vector2f(2 * pet.getCleanliness(), 20));
-		statusBars[4].setSize(sf::Vector2f(2 * pet.getHealth(), 20));
+		int stats[5] = {
+			100 - pet.getHunger(), // invert hunger
+			pet.getHappiness(),
+			pet.getEnergy(),
+			pet.getCleanliness(),
+			pet.getHealth()
+		};
 
-		// Update name and age text
+		for (int i = 0; i < 5; i++) {
+			int heartsToShow = stats[i] / 20;
+			// Heart transparency when empty
+			for (int j = 0; j < 5; j++) {
+				hearts[i][j].setColor(j < heartsToShow ? sf::Color::White : sf::Color(255, 255, 255, 50));
+			}
+		}
+
 		nameAgeText.setString(pet.getName() + " - Age: " + std::to_string(pet.getAge()) + " days");
-
-		// Update mood text and sprite
 		moodText.setString("Mood: " + pet.getMood());
 
 		PetMood mood = NORMAL;
-		if (!pet.getIsAlive()) {
-			mood = DEAD;
-		}
-		else if (pet.getHunger() > 80) {
-			mood = HUNGRY;
-		}
-		else if (pet.getEnergy() < 20) {
-			mood = TIRED;
-		}
-		else if (pet.getCleanliness() < 30) {
-			mood = DIRTY;
-		}
-		else if (pet.getHappiness() < 30) {
-			mood = SAD;
-		}
-		else if (pet.getHappiness() > 80) {
-			mood = HAPPY;
-		}
+		if (!pet.getIsAlive()) mood = DEAD;
+		else if (pet.getHunger() > 80) mood = HUNGRY;
+		else if (pet.getEnergy() < 20) mood = TIRED;
+		else if (pet.getCleanliness() < 30) mood = DIRTY;
+		else if (pet.getHappiness() < 30) mood = SAD;
+		else if (pet.getHappiness() > 80) mood = HAPPY;
 
 		petSprite.setTexture(petTextures[mood]);
 	}
@@ -295,24 +264,21 @@ private:
 	void handleEvents() {
 		sf::Event event;
 		while (window.pollEvent(event)) {
-			if (event.type == sf::Event::Closed) {
+			if (event.type == sf::Event::Closed)
 				window.close();
-			}
 
-			if (event.type == sf::Event::MouseButtonPressed) {
-				if (event.mouseButton.button == sf::Mouse::Left) {
-					sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-
-					// Check which button was clicked
-					for (int i = 0; i < 5; i++) {
-						if (buttons[i].getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
-							switch (i) {
-							case 0: pet.feed(); break;
-							case 1: pet.play(); break;
-							case 2: pet.sleep(); break;
-							case 3: pet.clean(); break;
-							case 4: pet.medicine(); break;
-							}
+			if (event.type == sf::Event::MouseButtonPressed &&
+				event.mouseButton.button == sf::Mouse::Left) {
+				sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+				// Check which button was clicked
+				for (int i = 0; i < 5; i++) {
+					if (buttons[i].getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+						switch (i) {
+						case 0: pet.feed(); break;
+						case 1: pet.play(); break;
+						case 2: pet.sleep(); break;
+						case 3: pet.clean(); break;
+						case 4: pet.medicine(); break;
 						}
 					}
 				}
@@ -321,7 +287,10 @@ private:
 	}
 
 public:
-	Game() : window(sf::VideoMode(800, 450), "Virtual Pet"), pet("Tama") {
+	Game() : window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT),
+		"Virtual Pet",
+		sf::Style::Titlebar | sf::Style::Close),
+		pet("Tama") {
 		srand(static_cast<unsigned int>(time(nullptr)));
 		loadAssets();
 	}
@@ -336,20 +305,17 @@ public:
 
 			window.clear(sf::Color(240, 240, 240));
 
-			// Draw pet sprite
 			window.draw(petSprite);
 
-			// Draw status bars and texts
 			for (int i = 0; i < 5; i++) {
 				window.draw(statusTexts[i]);
-				window.draw(statusBars[i]);
+				for (int j = 0; j < 5; j++)
+					window.draw(hearts[i][j]);
 			}
 
-			// Draw name, age and mood
 			window.draw(nameAgeText);
 			window.draw(moodText);
 
-			// Draw buttons
 			for (int i = 0; i < 5; i++) {
 				window.draw(buttons[i]);
 				window.draw(buttonLabels[i]);
