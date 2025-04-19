@@ -1,0 +1,32 @@
+# Ignore SFML DLLs
+*.dll
+
+# Ignore debug and release folders
+Debug/
+Release/
+
+# Ignore Visual Studio build files
+*.obj
+*.pdb
+*.idb
+*.ipch
+*.aps
+*.ncb
+*.sdf
+*.opensdf
+*.VC.db
+
+# Ignore user-specific VS files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.vcxproj.user
+*.vcxproj.filters
+
+# Ignore cache/temp folders
+.vs/
+*.log
+
+# Optional: ignore entire build folder
+build/
