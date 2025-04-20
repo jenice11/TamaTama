@@ -8,46 +8,23 @@
 #include <sstream>
 #include <thread>
 #include <chrono>
+#include <filesystem>
 
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 450;
 const int AGE_INTERVAL_MINUTES = 5; // Age up every 5 minutes
 
-// Template for getting/setting data in save file
-template<typename T>
-class SaveValue {
-private:
-	T value;
-
-public:
-	SaveValue(T defaultValue) : value(defaultValue) {}
-
-	T get() const { return value; }
-
-	void set(T newValue) { value = newValue; }
-
-	void writeTo(std::ofstream& outFile) const {
-		outFile << value << std::endl;
-	}
-
-	bool readFrom(std::ifstream& inFile) {
-		if (inFile >> value) {
-			return true;
-		}
-		return false;
-	}
-};
-
 class Pet {
 private:
-	SaveValue<int> hunger;         // 0-100 (0: full, 100: starving)
-	SaveValue<int> happiness;      // 0-100 (0: sad, 100: very happy)
-	SaveValue<int> energy;         // 0-100 (0: exhausted, 100: energetic)
-	SaveValue<int> cleanliness;    // 0-100 (0: dirty, 100: clean)
-	SaveValue<int> health;         // 0-100 (0: sick, 100: healthy)
-	SaveValue<int> age;            // in days
-	SaveValue<bool> isAlive;
-	SaveValue<std::string> name;
+	// Direct member variables instead of template-based SaveValue
+	int hunger;         // 0-100 (0: full, 100: starving)
+	int happiness;      // 0-100 (0: sad, 100: very happy)
+	int energy;         // 0-100 (0: exhausted, 100: energetic)
+	int cleanliness;    // 0-100 (0: dirty, 100: clean)
+	int health;         // 0-100 (0: sick, 100: healthy)
+	int age;            // in days
+	bool isAlive;
+	std::string name;
 	std::time_t lastUpdateTime;
 	std::time_t lastAgeTime;       // Last time the pet aged
 	std::time_t birthTime;
@@ -70,22 +47,36 @@ public:
 
 	// Save pet state to file
 	bool saveToFile(const std::string& filename) const {
+		namespace fs = std::filesystem;
+
+		// Create directory if it doesn't exist
+		fs::path savePath = fs::path(filename).parent_path();
+		if (!savePath.empty() && !fs::exists(savePath)) {
+			try {
+				std::cerr << "Save directory not found, creating new directory" << std::endl;
+				fs::create_directories(savePath);
+			}
+			catch (const fs::filesystem_error& e) {
+				std::cerr << "Failed to create save directory: " << e.what() << std::endl;
+				return false;
+			}
+		}
+
 		std::ofstream outFile(filename);
 		if (!outFile.is_open()) {
 			std::cerr << "Failed to open save file for writing" << std::endl;
 			return false;
 		}
 
-		hunger.writeTo(outFile);
-		happiness.writeTo(outFile);
-		energy.writeTo(outFile);
-		cleanliness.writeTo(outFile);
-		health.writeTo(outFile);
-		age.writeTo(outFile);
-		isAlive.writeTo(outFile);
-		name.writeTo(outFile);
-
-		// Save time values
+		// Write each value to the file
+		outFile << hunger << std::endl;
+		outFile << happiness << std::endl;
+		outFile << energy << std::endl;
+		outFile << cleanliness << std::endl;
+		outFile << health << std::endl;
+		outFile << age << std::endl;
+		outFile << (isAlive ? 1 : 0) << std::endl;
+		outFile << name << std::endl;
 		outFile << lastUpdateTime << std::endl;
 		outFile << lastAgeTime << std::endl;
 		outFile << birthTime << std::endl;
@@ -103,19 +94,36 @@ public:
 		}
 
 		// Read all values
-		if (!hunger.readFrom(inFile) ||
-			!happiness.readFrom(inFile) ||
-			!energy.readFrom(inFile) ||
-			!cleanliness.readFrom(inFile) ||
-			!health.readFrom(inFile) ||
-			!age.readFrom(inFile) ||
-			!isAlive.readFrom(inFile) ||
-			!name.readFrom(inFile) ||
-			!(inFile >> lastUpdateTime) ||
+		if (!(inFile >> hunger) ||
+			!(inFile >> happiness) ||
+			!(inFile >> energy) ||
+			!(inFile >> cleanliness) ||
+			!(inFile >> health) ||
+			!(inFile >> age)) {
+			std::cerr << "Error reading save file stats" << std::endl;
+			return false;
+		}
+
+		int alive;
+		if (!(inFile >> alive)) {
+			std::cerr << "Error reading alive status" << std::endl;
+			return false;
+		}
+		isAlive = (alive != 0);
+
+		// Skip newline so getline() works correctly
+		inFile.ignore();
+
+		// Read name as a line
+		if (!std::getline(inFile, name)) {
+			std::cerr << "Error reading pet name" << std::endl;
+			return false;
+		}
+
+		if (!(inFile >> lastUpdateTime) ||
 			!(inFile >> lastAgeTime) ||
 			!(inFile >> birthTime)) {
-
-			std::cerr << "Error reading save file" << std::endl;
+			std::cerr << "Error reading time values" << std::endl;
 			return false;
 		}
 
@@ -127,7 +135,7 @@ public:
 		int daysToAdd = static_cast<int>(minutesPassed / AGE_INTERVAL_MINUTES);
 
 		if (daysToAdd > 0) {
-			age.set(age.get() + daysToAdd);
+			age += daysToAdd;
 			std::cout << "Pet aged " << daysToAdd << " days while you were away" << std::endl;
 			// Recalculate last age time based on passed days
 			lastAgeTime = currentTime - static_cast<time_t>(
@@ -148,19 +156,19 @@ public:
 
 		if (minutesPassed >= 1.0) {
 			// Increase hunger
-			hunger.set(std::min(100, std::max(0, hunger.get() + static_cast<int>(minutesPassed * 5))));
+			hunger = std::min(100, std::max(0, hunger + static_cast<int>(minutesPassed * 5)));
 			// Decrease happiness
-			happiness.set(std::min(100, std::max(0, happiness.get() - static_cast<int>(minutesPassed * 3))));
+			happiness = std::min(100, std::max(0, happiness - static_cast<int>(minutesPassed * 3)));
 			// Decrease energy
-			energy.set(std::min(100, std::max(0, energy.get() - static_cast<int>(minutesPassed * 2))));
+			energy = std::min(100, std::max(0, energy - static_cast<int>(minutesPassed * 2)));
 			// Decrease cleanliness
-			cleanliness.set(std::min(100, std::max(0, cleanliness.get() - static_cast<int>(minutesPassed * 4))));
+			cleanliness = std::min(100, std::max(0, cleanliness - static_cast<int>(minutesPassed * 4)));
 
 			// Update health based on other stats
-			health.set(100 - ((hunger.get() + (100 - happiness.get()) + (100 - energy.get()) + (100 - cleanliness.get())) / 4));
+			health = 100 - ((hunger + (100 - happiness) + (100 - energy) + (100 - cleanliness)) / 4);
 
-			if (health.get() <= 0) {
-				isAlive.set(false);
+			if (health <= 0) {
+				isAlive = false;
 			}
 
 			lastUpdateTime = currentTime;
@@ -172,70 +180,70 @@ public:
 		if (ageMinutesPassed >= AGE_INTERVAL_MINUTES) {
 			// Calculate how many days to add when the game was closed
 			int daysToAdd = static_cast<int>(ageMinutesPassed / AGE_INTERVAL_MINUTES);
-			age.set(age.get() + daysToAdd);
+			age += daysToAdd;
 
 			// Update last age time for remaining minutes
 			lastAgeTime = currentTime - static_cast<time_t>(
 				(ageMinutesPassed - (daysToAdd * AGE_INTERVAL_MINUTES)) * 60);
 
-			std::cout << "Pet aged to " << age.get() << " days" << std::endl;
+			std::cout << "Pet aged to " << age << " days" << std::endl;
 		}
 	}
 
 	void feed() {
-		if (isAlive.get()) {
-			hunger.set(std::max(0, hunger.get() - 30));
-			energy.set(std::min(100, energy.get() + 5));
+		if (isAlive) {
+			hunger = std::max(0, hunger - 30);
+			energy = std::min(100, energy + 5);
 		}
 	}
 
 	void play() {
-		if (isAlive.get() && energy.get() > 10) {
-			happiness.set(std::min(100, happiness.get() + 25));
-			energy.set(std::max(0, energy.get() - 10));
-			hunger.set(std::min(100, hunger.get() + 5));
+		if (isAlive && energy > 10) {
+			happiness = std::min(100, happiness + 25);
+			energy = std::max(0, energy - 10);
+			hunger = std::min(100, hunger + 5);
 		}
 	}
 
 	void sleep() {
-		if (isAlive.get()) {
-			energy.set(std::min(100, energy.get() + 50));
-			hunger.set(std::min(100, hunger.get() + 15));
+		if (isAlive) {
+			energy = std::min(100, energy + 50);
+			hunger = std::min(100, hunger + 15);
 		}
 	}
 
 	void clean() {
-		if (isAlive.get()) {
-			cleanliness.set(100);
-			happiness.set(std::min(100, happiness.get() + 5));
+		if (isAlive) {
+			cleanliness = 100;
+			happiness = std::min(100, happiness + 5);
 		}
 	}
 
 	void medicine() {
-		if (isAlive.get() && health.get() < 80) {
-			health.set(std::min(100, health.get() + 20));
-			happiness.set(std::max(0, happiness.get() - 5));
+		if (isAlive && health < 80) {
+			health = std::min(100, health + 20);
+			happiness = std::max(0, happiness - 5);
 		}
 	}
 
 	// Getters
-	int getHunger() const { return hunger.get(); }
-	int getHappiness() const { return happiness.get(); }
-	int getEnergy() const { return energy.get(); }
-	int getCleanliness() const { return cleanliness.get(); }
-	int getHealth() const { return health.get(); }
-	int getAge() const { return age.get(); }
-	bool getIsAlive() const { return isAlive.get(); }
-	std::string getName() const { return name.get(); }
+	int getHunger() const { return hunger; }
+	int getHappiness() const { return happiness; }
+	int getEnergy() const { return energy; }
+	int getCleanliness() const { return cleanliness; }
+	int getHealth() const { return health; }
+	int getAge() const { return age; }
+	bool getIsAlive() const { return isAlive; }
+	std::string getName() const { return name; }
 
 	std::string getMood() const {
-		if (!isAlive.get()) return "Dead";
-		if (hunger.get() > 80) return "Hungry";
-		if (energy.get() < 20) return "Tired";
-		if (cleanliness.get() < 30) return "Dirty";
-		if (health.get() < 40) return "Sick";
-		if (happiness.get() < 30) return "Sad";
-		if (happiness.get() > 80) return "Happy";
+		if (!isAlive) return "Dead";
+		if (hunger > 80) return "Hungry";
+		if (energy < 20) return "Tired";
+		if (cleanliness < 30) return "Dirty";
+		if (health < 40) return "Sick";
+		if (happiness < 30) return "Sad";
+		if (happiness > 80) return "Happy";
 		return "Normal";
 	}
 };
@@ -308,7 +316,7 @@ private:
 
 			for (int j = 0; j < 5; j++) {
 				hearts[i][j].setTexture(heartTexture);
-				hearts[i][j].setScale(0.04f, 0.04f); 
+				hearts[i][j].setScale(0.04f, 0.04f);
 				hearts[i][j].setPosition(startX + i * spacing + j * 21, heartsY);
 			}
 		}
@@ -329,7 +337,7 @@ private:
 			buttons[i].setFillColor(sf::Color(200, 200, 200));
 			buttons[i].setOutlineThickness(2);
 			buttons[i].setOutlineColor(sf::Color::Black);
-			buttons[i].setPosition(80 + i * 130, 350);
+			buttons[i].setPosition(80.f + i * 130.f, 350.f);
 
 			buttonLabels[i].setFont(font);
 			buttonLabels[i].setString(buttonTexts[i]);
@@ -414,13 +422,13 @@ public:
 	Game() : window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT),
 		"Virtual Pet",
 		sf::Style::Titlebar | sf::Style::Close),
-		pet("Tama"),
+		pet("Tama kun"),
 		shouldSaveOnExit(true) {
 		srand(static_cast<unsigned int>(time(nullptr)));
 		loadAssets();
 
 		if (!pet.loadFromFile(saveFilePath)) {
-			std::cout << "No save file found, starting with a new pet" << std::endl;
+			std::cout << "Starting with a new pet" << std::endl;
 		}
 		else {
 			std::cout << "Pet loaded from save file" << std::endl;
