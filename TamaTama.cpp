@@ -13,10 +13,12 @@
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 450;
 const int AGE_INTERVAL_MINUTES = 5; // Age up every 5 minutes
+const int DEATH_CONDITION_HOURS = 1; // Die after 1 hours of critical condition
+const int MAX_NAME_LENGTH = 15;
+
 
 class Pet {
 private:
-	// Direct member variables instead of template-based SaveValue
 	int hunger;         // 0-100 (0: full, 100: starving)
 	int happiness;      // 0-100 (0: sad, 100: very happy)
 	int energy;         // 0-100 (0: exhausted, 100: energetic)
@@ -29,6 +31,11 @@ private:
 	std::time_t lastAgeTime;       // Last time the pet aged
 	std::time_t birthTime;
 
+	std::time_t criticalHungerStartTime; // When hunger >=80
+	std::time_t criticalHealthStartTime; // When health <=20
+	bool isInCriticalHunger;
+	bool isInCriticalHealth;
+
 public:
 	Pet(const std::string& petName) :
 		hunger(20),
@@ -38,11 +45,15 @@ public:
 		health(100),
 		age(0),
 		isAlive(true),
-		name(petName) {
+		name(petName),
+		isInCriticalHunger(false),
+		isInCriticalHealth(false) {
 		std::time_t currentTime = std::time(nullptr);
 		lastUpdateTime = currentTime;
 		lastAgeTime = currentTime;
 		birthTime = currentTime;
+		criticalHungerStartTime = 0;
+		criticalHealthStartTime = 0;
 	}
 
 	// Save pet state to file
@@ -80,6 +91,10 @@ public:
 		outFile << lastUpdateTime << std::endl;
 		outFile << lastAgeTime << std::endl;
 		outFile << birthTime << std::endl;
+		outFile << criticalHungerStartTime << std::endl;
+		outFile << criticalHealthStartTime << std::endl;
+		outFile << (isInCriticalHunger ? 1 : 0) << std::endl;
+		outFile << (isInCriticalHealth ? 1 : 0) << std::endl;
 
 		outFile.close();
 		return true;
@@ -127,11 +142,33 @@ public:
 			return false;
 		}
 
+		if (!(inFile >> criticalHungerStartTime) ||
+			!(inFile >> criticalHealthStartTime)) {
+			std::cerr << "Error reading critical condition times" << std::endl;
+			criticalHungerStartTime = 0;
+			criticalHealthStartTime = 0;
+			isInCriticalHunger = false;
+			isInCriticalHealth = false;
+		}
+		else {
+			int criticalHunger, criticalHealth;
+			if (!(inFile >> criticalHunger) ||
+				!(inFile >> criticalHealth)) {
+				std::cerr << "Error reading critical condition flags" << std::endl;
+				isInCriticalHunger = false;
+				isInCriticalHealth = false;
+			}
+			else {
+				isInCriticalHunger = (criticalHunger != 0);
+				isInCriticalHealth = (criticalHealth != 0);
+			}
+		}
+
 		// Reset last update time to avoid big stat changes
 		std::time_t currentTime = std::time(nullptr);
 
 		// Check pet aging when the game is closed
-		double minutesPassed = difftime(currentTime, lastAgeTime) / 60.0;
+		double minutesPassed = difftime(currentTime, lastUpdateTime) / 60.0;
 		int daysToAdd = static_cast<int>(minutesPassed / AGE_INTERVAL_MINUTES);
 
 		if (daysToAdd > 0) {
@@ -141,6 +178,22 @@ public:
 			lastAgeTime = currentTime - static_cast<time_t>(
 				(minutesPassed - (daysToAdd * AGE_INTERVAL_MINUTES)) * 60);
 		}
+		// Check death if pet was in critical state when game was closed
+		if (isAlive && isInCriticalHunger && criticalHungerStartTime > 0) {
+			double hoursHungry = difftime(currentTime, criticalHungerStartTime) / 3600.0;
+			if (hoursHungry >= DEATH_CONDITION_HOURS) {
+				isAlive = false;
+				std::cout << "Your pet died of starvation while you were away" << std::endl;
+			}
+		}
+
+		if (isAlive && isInCriticalHealth && criticalHealthStartTime > 0) {
+			double hoursSick = difftime(currentTime, criticalHealthStartTime) / 3600.0;
+			if (hoursSick >= DEATH_CONDITION_HOURS) {
+				isAlive = false;
+				std::cout << "Your pet died of illness while you were away" << std::endl;
+			}
+		}
 
 		lastUpdateTime = currentTime;
 
@@ -149,6 +202,8 @@ public:
 	}
 
 	void update() {
+		if (!isAlive) return;
+
 		std::time_t currentTime = std::time(nullptr);
 
 		// Update stats every minute
@@ -167,11 +222,49 @@ public:
 			// Update health based on other stats
 			health = 100 - ((hunger + (100 - happiness) + (100 - energy) + (100 - cleanliness)) / 4);
 
-			if (health <= 0) {
-				isAlive = false;
-			}
-
 			lastUpdateTime = currentTime;
+		}
+
+		// Check if hungry for 24 hours
+		if (hunger >= 80) {
+			if (!isInCriticalHunger) {
+				isInCriticalHunger = true;
+				criticalHungerStartTime = currentTime;
+				std::cout << "Pet is critically hungry!" << std::endl;
+			}
+			else {
+				double hoursHungry = difftime(currentTime, criticalHungerStartTime) / 3600.0;
+				if (hoursHungry >= DEATH_CONDITION_HOURS) {
+					isAlive = false;
+					std::cout << "Your pet died of starvation after " << DEATH_CONDITION_HOURS << " hours without food" << std::endl;
+					return;
+				}
+			}
+		}
+		else {
+			isInCriticalHunger = false;
+			criticalHungerStartTime = 0;
+		}
+
+		// Check if sick for 24 hours
+		if (health <= 20) {
+			if (!isInCriticalHealth) {
+				isInCriticalHealth = true;
+				criticalHealthStartTime = currentTime;
+				std::cout << "Pet is critically sick!" << std::endl;
+			}
+			else {
+				double hoursSick = difftime(currentTime, criticalHealthStartTime) / 3600.0;
+				if (hoursSick >= DEATH_CONDITION_HOURS) {
+					isAlive = false;
+					std::cout << "Your pet died of illness after " << DEATH_CONDITION_HOURS << " hours of being sick" << std::endl;
+					return;
+				}
+			}
+		}
+		else {
+			isInCriticalHealth = false;
+			criticalHealthStartTime = 0;
 		}
 
 		// Check pet aging for every AGE_INTERVAL_MINUTES
@@ -194,6 +287,12 @@ public:
 		if (isAlive) {
 			hunger = std::max(0, hunger - 30);
 			energy = std::min(100, energy + 5);
+
+			if (isInCriticalHunger) {
+				isInCriticalHunger = false;
+				criticalHungerStartTime = 0;
+				std::cout << "Pet is no longer critically hungry" << std::endl;
+			}
 		}
 	}
 
@@ -223,6 +322,13 @@ public:
 		if (isAlive && health < 80) {
 			health = std::min(100, health + 20);
 			happiness = std::max(0, happiness - 5);
+
+			// Reset critical health condition if health > 20
+			if (health > 20 && isInCriticalHealth) {
+				isInCriticalHealth = false;
+				criticalHealthStartTime = 0;
+				std::cout << "Pet is no longer critically sick" << std::endl;
+			}
 		}
 	}
 
@@ -265,9 +371,23 @@ private:
 	const std::string saveFilePath = "Saves/pet.save";
 	bool shouldSaveOnExit;
 
-	// Background update timer
 	sf::Clock backgroundUpdateClock;
 	const float BACKGROUND_UPDATE_INTERVAL = 1.0f; // Update every second when not focused
+
+	// Death UI elements
+	sf::RectangleShape deathBox;
+	sf::Text deathTitle;
+	sf::Text deathMessage;
+	sf::RectangleShape newPetButton;
+	sf::Text newPetButtonLabel;
+
+	// Create new pet UI elements
+	bool isCreatingNewPet;
+	sf::RectangleShape nameInputBox;
+	sf::Text nameInputText;
+	sf::Text namePromptText;
+	std::string inputName;
+	bool isInputActive;
 
 	enum PetMood { NORMAL, HAPPY, SAD, HUNGRY, TIRED, DIRTY, DEAD };
 
@@ -349,37 +469,117 @@ private:
 				350 + (40 - textBounds.height) / 2 - 5
 			);
 		}
+
+		// Death screen
+		deathBox.setSize(sf::Vector2f(400, 200));
+		deathBox.setFillColor(sf::Color(255, 255, 255, 230));
+		deathBox.setOutlineColor(sf::Color::Black);
+		deathBox.setOutlineThickness(2);
+		deathBox.setPosition((WINDOW_WIDTH - 400) / 2.0f, 120);
+
+		deathTitle.setFont(font);
+		deathTitle.setCharacterSize(18);
+		deathTitle.setFillColor(sf::Color::Black);
+
+		deathMessage.setFont(font);
+		deathMessage.setCharacterSize(18);
+		deathMessage.setFillColor(sf::Color::Black);
+
+		newPetButton.setSize(sf::Vector2f(200, 40));
+		newPetButton.setFillColor(sf::Color(100, 200, 100));
+		newPetButton.setOutlineColor(sf::Color::Black);
+		newPetButton.setOutlineThickness(2);
+		newPetButton.setPosition((WINDOW_WIDTH - 200) / 2.0f, 250);
+
+		newPetButtonLabel.setFont(font);
+		newPetButtonLabel.setString("Create New Pet");
+		newPetButtonLabel.setCharacterSize(16);
+		newPetButtonLabel.setFillColor(sf::Color::Black);
+		sf::FloatRect newPetBounds = newPetButtonLabel.getLocalBounds();
+		newPetButtonLabel.setPosition(
+			(WINDOW_WIDTH - newPetBounds.width) / 2.0f,
+			250 + (40 - newPetBounds.height) / 2 - 5
+		);
+
+		// New pet input
+		namePromptText.setFont(font);
+		namePromptText.setString("Enter a name for your new pet:");
+		namePromptText.setCharacterSize(18);
+		namePromptText.setFillColor(sf::Color::Black);
+		sf::FloatRect namePromptBounds = namePromptText.getLocalBounds();
+		namePromptText.setPosition(
+			(WINDOW_WIDTH - namePromptBounds.width) / 2.0f,
+			140
+		);
+
+		nameInputBox.setSize(sf::Vector2f(200, 40));
+		nameInputBox.setFillColor(sf::Color::White);
+		nameInputBox.setOutlineColor(sf::Color::Black);
+		nameInputBox.setOutlineThickness(2);
+		nameInputBox.setPosition((WINDOW_WIDTH - 200) / 2.0f, 180);
+
+		nameInputText.setFont(font);
+		nameInputText.setCharacterSize(16);
+		nameInputText.setFillColor(sf::Color::Black);
+		nameInputText.setPosition((WINDOW_WIDTH - 180) / 2.0f, 190);
+	}
+
+	void createNewPet(const std::string& name) {
+		pet = Pet(name);
+		isCreatingNewPet = false;
+		isInputActive = false;
+		std::cout << "Created new pet named: " << name << std::endl;
 	}
 
 	void updateUI() {
-		int stats[5] = {
-			100 - pet.getHunger(),
-			pet.getHappiness(),
-			pet.getEnergy(),
-			pet.getCleanliness(),
-			pet.getHealth()
-		};
+		if (pet.getIsAlive()) {
+			int stats[5] = {
+				100 - pet.getHunger(),
+				pet.getHappiness(),
+				pet.getEnergy(),
+				pet.getCleanliness(),
+				pet.getHealth()
+			};
 
-		for (int i = 0; i < 5; i++) {
-			int heartsToShow = stats[i] / 20;
-			// Heart transparency when empty
-			for (int j = 0; j < 5; j++) {
-				hearts[i][j].setColor(j < heartsToShow ? sf::Color::White : sf::Color(255, 255, 255, 50));
+			for (int i = 0; i < 5; i++) {
+				int heartsToShow = stats[i] / 20;
+				// Heart transparency when empty
+				for (int j = 0; j < 5; j++) {
+					hearts[i][j].setColor(j < heartsToShow ? sf::Color::White : sf::Color(255, 255, 255, 50));
+				}
+			}
+
+			nameAgeText.setString(pet.getName() + " - Age: " + std::to_string(pet.getAge()) + " days");
+			moodText.setString("Mood: " + pet.getMood());
+
+			PetMood mood = NORMAL;
+			if (pet.getHunger() > 80) mood = HUNGRY;
+			else if (pet.getEnergy() < 20) mood = TIRED;
+			else if (pet.getCleanliness() < 30) mood = DIRTY;
+			else if (pet.getHappiness() < 30) mood = SAD;
+			else if (pet.getHappiness() > 80) mood = HAPPY;
+
+			petSprite.setTexture(petTextures[mood]);
+		}
+		else {
+			std::string petName = pet.getName();
+			deathTitle.setString("Your " + petName + " died.");
+			deathMessage.setString("Would you like to foster a new pet?");
+
+			// Center the message
+			sf::FloatRect textBounds1 = deathTitle.getLocalBounds();
+			sf::FloatRect textBounds2 = deathMessage.getLocalBounds();
+
+			deathTitle.setPosition((WINDOW_WIDTH - textBounds1.width) / 2.0f, 150);
+			deathMessage.setPosition((WINDOW_WIDTH - textBounds2.width) / 2.0f, 190);
+
+			// Set sprite to dead texture
+			petSprite.setTexture(petTextures[DEAD]);
+
+			if (isCreatingNewPet) {
+				nameInputText.setString(inputName + (isInputActive ? "_" : ""));
 			}
 		}
-
-		nameAgeText.setString(pet.getName() + " - Age: " + std::to_string(pet.getAge()) + " days");
-		moodText.setString("Mood: " + pet.getMood());
-
-		PetMood mood = NORMAL;
-		if (!pet.getIsAlive()) mood = DEAD;
-		else if (pet.getHunger() > 80) mood = HUNGRY;
-		else if (pet.getEnergy() < 20) mood = TIRED;
-		else if (pet.getCleanliness() < 30) mood = DIRTY;
-		else if (pet.getHappiness() < 30) mood = SAD;
-		else if (pet.getHappiness() > 80) mood = HAPPY;
-
-		petSprite.setTexture(petTextures[mood]);
 	}
 
 	void handleEvents() {
@@ -399,22 +599,70 @@ private:
 				backgroundUpdateClock.restart();
 			}
 
+			if (event.type == sf::Event::TextEntered) {
+				if (event.text.unicode == 8 && !inputName.empty()) {
+					inputName.pop_back();
+				}
+				// Only add character if has valid character
+				else if (event.text.unicode >= 32 && event.text.unicode < 128) {
+					std::string tempInput = inputName + static_cast<char>(event.text.unicode);
+
+					nameInputText.setString(tempInput);
+					sf::FloatRect textBounds = nameInputText.getLocalBounds();
+
+					// Only add the character if it fits inside box
+					if (textBounds.width <= nameInputBox.getSize().x - 20) {
+						inputName = tempInput;
+					}
+				}
+				nameInputText.setString(inputName);
+			}
+
 			if (event.type == sf::Event::MouseButtonPressed &&
 				event.mouseButton.button == sf::Mouse::Left) {
 				sf::Vector2i mousePos = sf::Mouse::getPosition(window);
-				// Check which button was clicked
-				for (int i = 0; i < 5; i++) {
-					if (buttons[i].getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
-						switch (i) {
-						case 0: pet.feed(); break;
-						case 1: pet.play(); break;
-						case 2: pet.sleep(); break;
-						case 3: pet.clean(); break;
-						case 4: pet.medicine(); break;
+
+				// Special scenario - Pet Died
+				if (!pet.getIsAlive()) {
+					if (!isCreatingNewPet) {
+						if (newPetButton.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+							isCreatingNewPet = true;
+							inputName = "";
+							isInputActive = true;
+						}
+					}
+					else {
+						if (nameInputBox.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+							isInputActive = true;
+						}
+						else {
+							isInputActive = false;
+						}
+
+						if (newPetButton.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+							if (!inputName.empty()) {
+								createNewPet(inputName);
+							}
+						}
+					}
+				}
+				// Normal scenario
+				else {
+					for (int i = 0; i < 5; i++) {
+						if (buttons[i].getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+							switch (i) {
+							case 0: pet.feed(); break;
+							case 1: pet.play(); break;
+							case 2: pet.sleep(); break;
+							case 3: pet.clean(); break;
+							case 4: pet.medicine(); break;
+							}
 						}
 					}
 				}
 			}
+
+
 		}
 	}
 
@@ -423,7 +671,9 @@ public:
 		"Virtual Pet",
 		sf::Style::Titlebar | sf::Style::Close),
 		pet("Tama kun"),
-		shouldSaveOnExit(true) {
+		shouldSaveOnExit(true),
+		isCreatingNewPet(false),
+		isInputActive(false) {
 		srand(static_cast<unsigned int>(time(nullptr)));
 		loadAssets();
 
@@ -456,18 +706,39 @@ public:
 
 			window.draw(petSprite);
 
-			for (int i = 0; i < 5; i++) {
-				window.draw(statusTexts[i]);
-				for (int j = 0; j < 5; j++)
-					window.draw(hearts[i][j]);
+			if (pet.getIsAlive()) {
+				for (int i = 0; i < 5; i++) {
+					window.draw(statusTexts[i]);
+					for (int j = 0; j < 5; j++)
+						window.draw(hearts[i][j]);
+				}
+
+				window.draw(nameAgeText);
+				window.draw(moodText);
+
+				for (int i = 0; i < 5; i++) {
+					window.draw(buttons[i]);
+					window.draw(buttonLabels[i]);
+				}
 			}
-
-			window.draw(nameAgeText);
-			window.draw(moodText);
-
-			for (int i = 0; i < 5; i++) {
-				window.draw(buttons[i]);
-				window.draw(buttonLabels[i]);
+			else {
+				if (!isCreatingNewPet) {
+					// Draw death message and new pet button
+					window.draw(deathBox);
+					window.draw(deathTitle);
+					window.draw(deathMessage);
+					window.draw(newPetButton);
+					window.draw(newPetButtonLabel);
+				}
+				else {
+					// Draw new pet creation UI
+					window.draw(deathBox);
+					window.draw(namePromptText);
+					window.draw(nameInputBox);
+					window.draw(nameInputText);
+					window.draw(newPetButton);
+					window.draw(newPetButtonLabel);
+				}
 			}
 
 			window.display();
