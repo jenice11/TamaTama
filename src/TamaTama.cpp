@@ -402,9 +402,9 @@ private:
 			throw "Cannot load HeartFull.png";
 		}
 
-		if (!petTextures[0].loadFromFile("Assets/Textures/nyancat.png")) {
-			std::cerr << "Failed to load cat texture!" << std::endl;
-			throw "Cannot load nyancat.png";
+		if (!petTextures[0].loadFromFile("Assets/Textures/normal.png")) {
+			std::cerr << "Failed to load texture!" << std::endl;
+			throw "Cannot load normal.png";
 		}
 
 		petSprite.setTexture(petTextures[0]);
