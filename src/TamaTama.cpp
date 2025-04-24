@@ -1,7 +1,5 @@
-#include <SFML/Graphics.hpp>
 #include <SFML/Audio.hpp>
 #include <iostream>
-#include <string>
 #include <ctime>
 #include <cstdlib>
 #include <fstream>
@@ -9,6 +7,8 @@
 #include <thread>
 #include <chrono>
 #include <filesystem>
+#include <array>
+#include "textureManager.h"
 
 const int WINDOW_WIDTH = 800;
 const int WINDOW_HEIGHT = 450;
@@ -356,13 +356,14 @@ public:
 
 class Game {
 private:
+	TextureManager textureManager;
 	sf::RenderWindow window;
 	Pet pet;
 	sf::Font font;
-	sf::Texture petTextures[7]; // Different mood textures
+	std::unique_ptr<std::array<sf::Texture, 7>> petTextures; // Different mood textures
 	sf::Sprite petSprite;
 	sf::Texture heartTexture;
-	sf::Sprite hearts[5][5]; // 5 stats, each max 5 hearts
+	std::unique_ptr<std::array<std::array<sf::Sprite, 5>, 5>> hearts; // 5 stats, each max 5 hearts
 	sf::Text statusTexts[5];
 	sf::Text nameAgeText;
 	sf::Text moodText;
@@ -392,22 +393,25 @@ private:
 	enum PetMood { NORMAL, HAPPY, SAD, HUNGRY, TIRED, DIRTY, DEAD };
 
 	void loadAssets() {
-		if (!font.loadFromFile("Assets/Fonts/arial.ttf")) {
+		if (!font.loadFromFile("assets/fonts/arial.ttf")) {
 			std::cerr << "Failed to load font!" << std::endl;
 			throw "Cannot load arial.tff";
 		}
 
-		if (!heartTexture.loadFromFile("Assets/Textures/heart.png")) {
-			std::cerr << "Failed to load heart texture!" << std::endl;
-			throw "Cannot load HeartFull.png";
-		}
+		// Load heart texture
+		heartTexture = textureManager.getTexture("assets/textures/heart.png");
 
-		if (!petTextures[0].loadFromFile("Assets/Textures/normal.png")) {
-			std::cerr << "Failed to load texture!" << std::endl;
-			throw "Cannot load normal.png";
-		}
+		// Load pet textures for different moods
+		(*petTextures)[NORMAL] = textureManager.getTexture("assets/textures/normal.png");
+		(*petTextures)[HAPPY] = textureManager.getTexture("assets/textures/happy.png");
+		(*petTextures)[SAD] = textureManager.getTexture("assets/textures/sad.png");
+		(*petTextures)[HUNGRY] = textureManager.getTexture("assets/textures/hungry.png");
+		(*petTextures)[TIRED] = textureManager.getTexture("assets/textures/tired.png");
+		(*petTextures)[DIRTY] = textureManager.getTexture("assets/textures/dirty.png");
+		(*petTextures)[DEAD] = textureManager.getTexture("assets/textures/dead.png");
 
-		petSprite.setTexture(petTextures[0]);
+		// Set initial texture
+		petSprite.setTexture((*petTextures)[NORMAL]);
 
 		// Set origin to center of pet sprite
 		sf::FloatRect spriteBounds = petSprite.getLocalBounds();
@@ -435,9 +439,8 @@ private:
 			statusTexts[i].setPosition(labelX, labelY);
 
 			for (int j = 0; j < 5; j++) {
-				hearts[i][j].setTexture(heartTexture);
-				hearts[i][j].setScale(0.04f, 0.04f);
-				hearts[i][j].setPosition(startX + i * spacing + j * 21, heartsY);
+				(*hearts)[i][j].setTexture(heartTexture);
+				(*hearts)[i][j].setPosition(startX + i * spacing + j * 21, heartsY);
 			}
 		}
 
@@ -545,7 +548,7 @@ private:
 				int heartsToShow = stats[i] / 20;
 				// Heart transparency when empty
 				for (int j = 0; j < 5; j++) {
-					hearts[i][j].setColor(j < heartsToShow ? sf::Color::White : sf::Color(255, 255, 255, 50));
+					(*hearts)[i][j].setColor(j < heartsToShow ? sf::Color::White : sf::Color(255, 255, 255, 50));
 				}
 			}
 
@@ -559,7 +562,7 @@ private:
 			else if (pet.getHappiness() < 30) mood = SAD;
 			else if (pet.getHappiness() > 80) mood = HAPPY;
 
-			petSprite.setTexture(petTextures[mood]);
+			petSprite.setTexture((*petTextures)[mood]);
 		}
 		else {
 			std::string petName = pet.getName();
@@ -574,7 +577,7 @@ private:
 			deathMessage.setPosition((WINDOW_WIDTH - textBounds2.width) / 2.0f, 190);
 
 			// Set sprite to dead texture
-			petSprite.setTexture(petTextures[DEAD]);
+			petSprite.setTexture((*petTextures)[DEAD]);
 
 			if (isCreatingNewPet) {
 				nameInputText.setString(inputName + (isInputActive ? "_" : ""));
@@ -674,6 +677,11 @@ public:
 		shouldSaveOnExit(true),
 		isCreatingNewPet(false),
 		isInputActive(false) {
+
+		// Initialize smart pointers
+		petTextures = std::make_unique<std::array<sf::Texture, 7>>();
+		hearts = std::make_unique<std::array<std::array<sf::Sprite, 5>, 5>>();
+
 		srand(static_cast<unsigned int>(time(nullptr)));
 		loadAssets();
 
@@ -710,7 +718,7 @@ public:
 				for (int i = 0; i < 5; i++) {
 					window.draw(statusTexts[i]);
 					for (int j = 0; j < 5; j++)
-						window.draw(hearts[i][j]);
+						window.draw((*hearts)[i][j]);
 				}
 
 				window.draw(nameAgeText);
