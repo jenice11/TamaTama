@@ -13,11 +13,11 @@ private:
 	sf::Sprite petSprite;
 	sf::Texture heartTexture;
 	std::unique_ptr<std::array<std::array<sf::Sprite, 5>, 5>> hearts; // 5 stats, each max 5 hearts
-	sf::Text statusTexts[5];
+	std::unique_ptr<std::array<sf::Text, 5>> statusTexts;
 	sf::Text nameAgeText;
 	sf::Text moodText;
-	sf::RectangleShape buttons[5];
-	sf::Text buttonLabels[5];
+	std::unique_ptr<std::array<sf::RectangleShape, 7>> buttons;
+	std::unique_ptr<std::array<sf::Text, 7>> buttonLabels;
 	const std::string saveFilePath = "Saves/pet.save";
 	bool shouldSaveOnExit;
 
@@ -40,6 +40,7 @@ private:
 	bool isInputActive;
 
 	void loadAssets();
+	void loadGameUI();
 	void createNewPet(const std::string& name);
 	void updateUI();
 	void handleEvents();

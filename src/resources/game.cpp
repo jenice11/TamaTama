@@ -25,7 +25,9 @@ void Game::loadAssets() {
 
 	// Set initial texture
 	petSprite.setTexture((*petTextures)[NORMAL]);
+}
 
+void Game::loadGameUI() {
 	// Set origin to center of pet sprite
 	sf::FloatRect spriteBounds = petSprite.getLocalBounds();
 	petSprite.setOrigin(spriteBounds.width / 2.0f, spriteBounds.height / 2.0f);
@@ -41,15 +43,15 @@ void Game::loadAssets() {
 	float heartsY = 40;
 
 	for (int i = 0; i < 5; i++) {
-		statusTexts[i].setFont(font);
-		statusTexts[i].setString(statusNames[i]);
-		statusTexts[i].setCharacterSize(14);
-		statusTexts[i].setFillColor(sf::Color::Black);
+		(*statusTexts)[i].setFont(font);
+		(*statusTexts)[i].setString(statusNames[i]);
+		(*statusTexts)[i].setCharacterSize(14);
+		(*statusTexts)[i].setFillColor(sf::Color::Black);
 
 		// Center text over the bar
-		sf::FloatRect textBounds = statusTexts[i].getLocalBounds();
+		sf::FloatRect textBounds = (*statusTexts)[i].getLocalBounds();
 		float labelX = startX + i * spacing + (100 - textBounds.width) / 2;
-		statusTexts[i].setPosition(labelX, labelY);
+		(*statusTexts)[i].setPosition(labelX, labelY);
 
 		for (int j = 0; j < 5; j++) {
 			(*hearts)[i][j].setTexture(heartTexture);
@@ -68,19 +70,20 @@ void Game::loadAssets() {
 	moodText.setPosition(340, 290);
 
 	std::string buttonTexts[5] = { "Feed", "Play", "Sleep", "Clean", "Medicine" };
-	for (int i = 0; i < 5; i++) {
-		buttons[i].setSize(sf::Vector2f(120, 40));
-		buttons[i].setFillColor(sf::Color(200, 200, 200));
-		buttons[i].setOutlineThickness(2);
-		buttons[i].setOutlineColor(sf::Color::Black);
-		buttons[i].setPosition(80.f + i * 130.f, 350.f);
 
-		buttonLabels[i].setFont(font);
-		buttonLabels[i].setString(buttonTexts[i]);
-		buttonLabels[i].setCharacterSize(16);
-		buttonLabels[i].setFillColor(sf::Color::Black);
-		sf::FloatRect textBounds = buttonLabels[i].getLocalBounds();
-		buttonLabels[i].setPosition(
+	for (int i = 0; i < 5; i++) {
+		(*buttons)[i].setSize(sf::Vector2f(120, 40));
+		(*buttons)[i].setFillColor(sf::Color(200, 200, 200));
+		(*buttons)[i].setOutlineThickness(2);
+		(*buttons)[i].setOutlineColor(sf::Color::Black);
+		(*buttons)[i].setPosition(80.f + i * 130.f, 350.f);
+
+		(*buttonLabels)[i].setFont(font);
+		(*buttonLabels)[i].setString(buttonTexts[i]);
+		(*buttonLabels)[i].setCharacterSize(16);
+		(*buttonLabels)[i].setFillColor(sf::Color::Black);
+		sf::FloatRect textBounds = (*buttonLabels)[i].getLocalBounds();
+		(*buttonLabels)[i].setPosition(
 			80 + i * 130 + (120 - textBounds.width) / 2,
 			350 + (40 - textBounds.height) / 2 - 5
 		);
@@ -203,7 +206,7 @@ void Game::updateUI() {
 
 	if (pet.getIsAlive()) {
 		for (int i = 0; i < 5; i++) {
-			window.draw(statusTexts[i]);
+			window.draw((*statusTexts)[i]);
 			for (int j = 0; j < 5; j++)
 				window.draw((*hearts)[i][j]);
 		}
@@ -212,8 +215,8 @@ void Game::updateUI() {
 		window.draw(moodText);
 
 		for (int i = 0; i < 5; i++) {
-			window.draw(buttons[i]);
-			window.draw(buttonLabels[i]);
+			window.draw((*buttons)[i]);
+			window.draw((*buttonLabels)[i]);
 		}
 	}
 	else {
@@ -303,7 +306,7 @@ void Game::handleEvents() {
 				// Normal scenario
 				else {
 					for (int i = 0; i < 5; i++) {
-						if (buttons[i].getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+						if ((*buttons)[i].getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
 							switch (i) {
 							case 0: pet.feed(); break;
 							case 1: pet.play(); break;
@@ -331,9 +334,13 @@ Game::Game() : window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT),
 	// Initialize smart pointers
 	petTextures = std::make_unique<std::array<sf::Texture, 7>>();
 	hearts = std::make_unique<std::array<std::array<sf::Sprite, 5>, 5>>();
+	statusTexts = std::make_unique<std::array<sf::Text, 5>>();
+	buttons = std::make_unique<std::array<sf::RectangleShape, 7>>();
+	buttonLabels = std::make_unique<std::array<sf::Text, 7>>();
 
 	srand(static_cast<unsigned int>(time(nullptr)));
 	loadAssets();
+	loadGameUI();
 
 	if (!pet.loadPetFromFile(saveFilePath)) {
 		std::cout << "Starting with a new pet" << std::endl;
@@ -346,8 +353,6 @@ Game::Game() : window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT),
 }
 
 void Game::run() {
-	window.setFramerateLimit(60);
-
 	while (window.isOpen()) {
 		handleEvents();
 
@@ -359,11 +364,5 @@ void Game::run() {
 		}
 
 		updateUI();
-
-		if (!window.hasFocus()) {
-			window.setFramerateLimit(30);
-		}
 	}
 }
-
-
