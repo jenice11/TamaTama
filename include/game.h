@@ -38,6 +38,7 @@ private:
 	sf::Text namePromptText;
 	std::string inputName;
 	bool isInputActive;
+	bool isFirstLaunch;
 
 	void loadAssets();
 	void loadGameUI();

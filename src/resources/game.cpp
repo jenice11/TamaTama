@@ -1,4 +1,5 @@
 #include <iostream>
+#include <filesystem>
 #include "game.h"
 
 constexpr int WINDOW_WIDTH = 800;
@@ -151,6 +152,18 @@ void Game::createNewPet(const std::string& name) {
 }
 
 void Game::updateUI() {
+	if (isFirstLaunch) {
+		window.clear(sf::Color(240, 240, 240));
+		window.draw(deathBox);
+		window.draw(namePromptText);
+		window.draw(nameInputBox);
+		window.draw(nameInputText);
+		window.draw(newPetButton);
+		window.draw(newPetButtonLabel);
+		window.display();
+		return;
+	}
+
 	if (pet.getIsAlive()) {
 		int stats[5] = {
 			100 - pet.getHunger(),
@@ -261,27 +274,45 @@ void Game::handleEvents() {
 			break;
 
 		case sf::Event::TextEntered:
-			if (event.text.unicode == 8 && !inputName.empty()) {
-				inputName.pop_back();
-			}
-			// Only add character if has valid character
-			else if (event.text.unicode >= 32 && event.text.unicode < 128) {
-				std::string tempInput = inputName + static_cast<char>(event.text.unicode);
-				nameInputText.setString(tempInput);
-				sf::FloatRect textBounds = nameInputText.getLocalBounds();
-				// Only add the character if it fits inside box
-				if (textBounds.width <= nameInputBox.getSize().x - 20) {
-					inputName = tempInput;
+			if ((isCreatingNewPet || isFirstLaunch) && isInputActive) {
+				if (event.text.unicode == 8 && !inputName.empty()) {
+					inputName.pop_back();
 				}
+				// Only add character if has valid character
+				else if (event.text.unicode >= 32 && event.text.unicode < 128) {
+					std::string tempInput = inputName + static_cast<char>(event.text.unicode);
+					nameInputText.setString(tempInput);
+					sf::FloatRect textBounds = nameInputText.getLocalBounds();
+					// Only add the character if it fits inside box
+					if (textBounds.width <= nameInputBox.getSize().x - 20) {
+						inputName = tempInput;
+					}
+				}
+				nameInputText.setString(inputName + (isInputActive ? "_" : ""));
 			}
-			nameInputText.setString(inputName);
 			break;
 
 		case sf::Event::MouseButtonPressed:
 			if (event.mouseButton.button == sf::Mouse::Left) {
 				sf::Vector2i mousePos = sf::Mouse::getPosition(window);
+
+				if (isFirstLaunch) {
+					if (nameInputBox.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+						isInputActive = true;
+					}
+					else {
+						isInputActive = false;
+					}
+
+					if (newPetButton.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
+						if (!inputName.empty()) {
+							createNewPet(inputName);
+							isFirstLaunch = false;
+						}
+					}
+				}
 				// Special scenario - Pet Died
-				if (!pet.getIsAlive()) {
+				else if (!pet.getIsAlive()) {
 					if (!isCreatingNewPet) {
 						if (newPetButton.getGlobalBounds().contains(static_cast<float>(mousePos.x), static_cast<float>(mousePos.y))) {
 							isCreatingNewPet = true;
@@ -326,10 +357,11 @@ void Game::handleEvents() {
 Game::Game() : window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT),
 	"Virtual Pet",
 	sf::Style::Titlebar | sf::Style::Close),
-	pet("Tama kun"),
+	pet(""),
 	shouldSaveOnExit(true),
 	isCreatingNewPet(false),
-	isInputActive(false) {
+	isInputActive(false),
+	isFirstLaunch(false) {
 
 	// Initialize smart pointers
 	petTextures = std::make_unique<std::array<sf::Texture, 7>>();
@@ -342,11 +374,41 @@ Game::Game() : window(sf::VideoMode(WINDOW_WIDTH, WINDOW_HEIGHT),
 	loadAssets();
 	loadGameUI();
 
-	if (!pet.loadPetFromFile(saveFilePath)) {
-		std::cout << "Starting with a new pet" << std::endl;
+	bool saveFileExists = false;
+
+	try {
+		std::filesystem::path savePath(saveFilePath);
+		saveFileExists = std::filesystem::exists(savePath);
+	}
+	catch (const std::exception& e) {
+		std::cerr << "Error checking for save file: " << e.what() << std::endl;
+		saveFileExists = false;
+	}
+
+	if (!saveFileExists) {
+		std::cout << "No save file found at " << saveFilePath << ". Starting with pet creation." << std::endl;
+		isFirstLaunch = true;
+		isInputActive = true;
+		inputName = "";
+
+		namePromptText.setString("Welcome! Name your new pet:");
+		newPetButtonLabel.setString("Start Game");
+		nameInputText.setString("_");
 	}
 	else {
-		std::cout << "Pet loaded from save file" << std::endl;
+		if (pet.loadPetFromFile(saveFilePath)) {
+			std::cout << "Pet loaded from save file: " << saveFilePath << std::endl;
+		}
+		else {
+			std::cout << "Save file exists but could not be loaded. Starting with pet creation." << std::endl;
+			isFirstLaunch = true;
+			isInputActive = true;
+			inputName = "";
+
+			namePromptText.setString("Welcome! Name your new pet:");
+			newPetButtonLabel.setString("Start Game");
+			nameInputText.setString("_");
+		}
 	}
 
 	backgroundUpdateClock.restart();
