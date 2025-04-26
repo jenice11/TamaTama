@@ -1,14 +1,24 @@
 #pragma once
 #include <array>
+#include <SFML/Audio.hpp> 
 #include "textureManager.h"
 #include "pet.h"
+#include "shop.h"
 
 class Game {
 private:
-	TextureManager textureManager;
 	sf::RenderWindow window;
-	Pet pet;
+
+	TextureManager textureManager;
+	std::unique_ptr<Pet> pet;
+	std::unique_ptr<PetShop> shop;
+
+	sf::Texture backgroundTexture;
+	sf::Sprite backgroundSprite;
+
 	sf::Font font;
+	sf::Music backgroundMusic;
+
 	std::unique_ptr<std::array<sf::Texture, 7>> petTextures; // Different mood textures
 	sf::Sprite petSprite;
 	sf::Texture heartTexture;
@@ -16,6 +26,7 @@ private:
 	std::unique_ptr<std::array<sf::Text, 5>> statusTexts;
 	sf::Text nameAgeText;
 	sf::Text moodText;
+	sf::Text moneyText;
 	std::unique_ptr<std::array<sf::RectangleShape, 7>> buttons;
 	std::unique_ptr<std::array<sf::Text, 7>> buttonLabels;
 	const std::string saveFilePath = "Saves/pet.save";
@@ -40,10 +51,43 @@ private:
 	bool isInputActive;
 	bool isFirstLaunch;
 
+	// Inventory UI elements
+	bool showingInventory;
+	std::vector<sf::RectangleShape> inventoryItemBoxes;
+	std::vector<sf::Text> inventoryItemTexts;
+	sf::RectangleShape inventoryBackground;
+	sf::Text inventoryTitle;
+	sf::RectangleShape closeInventoryButton;
+	sf::Text closeInventoryText;
+
+	// Shop UI elements
+	bool showingShop;
+	std::vector<sf::RectangleShape> shopItemBoxes;
+	std::vector<sf::Text> shopItemTexts;
+	sf::RectangleShape shopBackground;
+	sf::Text shopTitle;
+	sf::RectangleShape closeShopButton;
+	sf::Text closeShopText;
+
+	// Item selection UI elements
+	bool showingItemSelection;
+	std::string currentSelectionCategory;
+	std::vector<sf::RectangleShape> selectionItemBoxes;
+	std::vector<sf::Text> selectionItemTexts;
+	sf::RectangleShape selectionBackground;
+	sf::Text selectionTitle;
+	sf::RectangleShape closeSelectionButton;
+	sf::Text closeSelectionText;
+
 	void loadAssets();
 	void loadGameUI();
 	void createNewPet(const std::string& name);
+
+	void showItemsByCategory(const std::string& category);
+	void updateSelectionUI(const std::string& category);
 	void updateUI();
+	void updateInventoryUI();
+	void updateShopUI();
 	void handleEvents();
 
 public:

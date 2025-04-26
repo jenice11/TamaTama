@@ -1,6 +1,9 @@
 #pragma once
 #include <string>
 #include <ctime>
+#include <vector>
+#include <memory>
+#include "Item.h"
 
 enum PetMood { NORMAL, HAPPY, SAD, HUNGRY, TIRED, DIRTY, DEAD };
 
@@ -22,19 +25,28 @@ private:
 	bool isInCriticalHunger;
 	bool isInCriticalHealth;
 
+	std::vector<std::unique_ptr<Item>> inventory;
+
 public:
 	Pet(const std::string& petName);
+	~Pet();
 
 	bool savePetToFile(const std::string& filename) const;
 	bool loadPetFromFile(const std::string& filename);
 
 	void update();
-	void feed();
+	void feed(int amount);
 	void play();
 	void sleep();
 	void clean();
-	void medicine();
+	void medicine(int amount);
 
+	// Inventory management
+	void addItemToInventory(Item* newItem);
+	bool useItemFromInventory(size_t index);
+	const std::vector<std::unique_ptr<Item>>& getInventory() const;
+
+	// Getters
 	int getHunger() const;
 	int getHappiness() const;
 	int getEnergy() const;

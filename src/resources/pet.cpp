@@ -23,7 +23,17 @@ Pet::Pet(const std::string& petName) :
 	birthTime = currentTime;
 	criticalHungerStartTime = 0;
 	criticalHealthStartTime = 0;
+
+	// Free starter items
+	addItemToInventory(new FoodItem("Regular Food", 5, 30, 5));
+	addItemToInventory(new FoodItem("Premium Food", 10, 50, 10));
+	addItemToInventory(new MedicineItem("Basic Medicine", 5, 20, 5));
 }
+
+Pet::~Pet() {
+	std::cout << "Pet class destroyed." << std::endl;
+}
+
 // Save pet state to file
 bool Pet::savePetToFile(const std::string& filename) const {
 	namespace fs = std::filesystem;
@@ -64,11 +74,25 @@ bool Pet::savePetToFile(const std::string& filename) const {
 	outFile << (isInCriticalHunger ? 1 : 0) << std::endl;
 	outFile << (isInCriticalHealth ? 1 : 0) << std::endl;
 
+	// Save inventory 
+	outFile << inventory.size() << std::endl;
+	for (const auto& item : inventory) {
+		outFile << item->getName() << std::endl;
+		outFile << item->getValue() << std::endl;
+		outFile << (item->isConsumed() ? 1 : 0) << std::endl;
+
+		if (dynamic_cast<const FoodItem*>(item.get())) {
+			outFile << 1 << std::endl;
+		}
+		else if (dynamic_cast<const MedicineItem*>(item.get())) {
+			outFile << 2 << std::endl;
+		}
+	}
+
 	outFile.close();
 	return true;
 }
 
-// Load pet state from file
 bool Pet::loadPetFromFile(const std::string& filename) {
 	std::ifstream inFile(filename);
 	if (!inFile.is_open()) {
@@ -76,7 +100,6 @@ bool Pet::loadPetFromFile(const std::string& filename) {
 		return false;
 	}
 
-	// Read all values
 	if (!(inFile >> hunger) ||
 		!(inFile >> happiness) ||
 		!(inFile >> energy) ||
@@ -97,7 +120,6 @@ bool Pet::loadPetFromFile(const std::string& filename) {
 	// Skip newline so getline() works correctly
 	inFile.ignore();
 
-	// Read name as a line
 	if (!std::getline(inFile, name)) {
 		std::cerr << "Error reading pet name" << std::endl;
 		return false;
@@ -129,6 +151,47 @@ bool Pet::loadPetFromFile(const std::string& filename) {
 		else {
 			isInCriticalHunger = (criticalHunger != 0);
 			isInCriticalHealth = (criticalHealth != 0);
+		}
+	}
+
+	// Clear existing inventory
+	inventory.clear();
+
+	int inventorySize;
+	if (!(inFile >> inventorySize)) {
+		std::cerr << "Error reading inventory size, using default items" << std::endl;
+		// Add default items
+		addItemToInventory(new FoodItem("Regular Food", 5, 30, 5));
+	}
+	else {
+		inFile.ignore();
+
+		for (int i = 0; i < inventorySize; i++) {
+			std::string itemName;
+			int itemValue, consumedFlag, itemType;
+
+			if (!std::getline(inFile, itemName) ||
+				!(inFile >> itemValue) ||
+				!(inFile >> consumedFlag) ||
+				!(inFile >> itemType)) {
+				std::cerr << "Error reading inventory item " << i << std::endl;
+				continue;
+			}
+			inFile.ignore();
+
+			Item* newItem = nullptr;
+			switch (itemType) {
+			case 1:
+				newItem = new FoodItem(itemName, itemValue, 30, 5);
+				break;
+			case 2:
+				newItem = new MedicineItem(itemName, itemValue, 20, 5);
+				break;
+			}
+
+			if (newItem) {
+				inventory.push_back(std::unique_ptr<Item>(newItem));
+			}
 		}
 	}
 
@@ -178,13 +241,13 @@ void Pet::update() {
 	double minutesPassed = difftime(currentTime, lastUpdateTime) / 60.0;
 
 	if (minutesPassed >= 1.0) {
-		// Increase hunger
+		// + hunger
 		hunger = std::min(100, std::max(0, hunger + static_cast<int>(minutesPassed * 5)));
-		// Decrease happiness
+		// - happiness
 		happiness = std::min(100, std::max(0, happiness - static_cast<int>(minutesPassed * 3)));
-		// Decrease energy
+		// - energy
 		energy = std::min(100, std::max(0, energy - static_cast<int>(minutesPassed * 2)));
-		// Decrease cleanliness
+		// - cleanliness
 		cleanliness = std::min(100, std::max(0, cleanliness - static_cast<int>(minutesPassed * 4)));
 
 		// Update health based on other stats
@@ -251,7 +314,7 @@ void Pet::update() {
 	}
 }
 
-void Pet::feed() {
+void Pet::feed(int amount) {
 	if (isAlive) {
 		hunger = std::max(0, hunger - 30);
 
@@ -285,10 +348,9 @@ void Pet::clean() {
 	}
 }
 
-void Pet::medicine() {
-	if (isAlive && health < 80) {
+void Pet::medicine(int amount) {
+	if (isAlive) {
 		health = std::min(100, health + 20);
-		happiness = std::max(0, happiness - 5);
 
 		// Reset critical health condition if health > 20
 		if (health > 20 && isInCriticalHealth) {
@@ -297,6 +359,29 @@ void Pet::medicine() {
 			std::cout << "Pet is no longer critically sick" << std::endl;
 		}
 	}
+}
+
+void Pet::addItemToInventory(Item* newItem) {
+	if (newItem) {
+		inventory.push_back(std::unique_ptr<Item>(newItem));
+	}
+}
+
+bool Pet::useItemFromInventory(size_t index) {
+	if (index < inventory.size() && !inventory[index]->isConsumed()) {
+		inventory[index]->use(this);
+
+		if (inventory[index]->isConsumed()) {
+			inventory.erase(inventory.begin() + index);
+		}
+
+		return true;
+	}
+	return false;
+}
+
+const std::vector<std::unique_ptr<Item>>& Pet::getInventory() const {
+	return inventory;
 }
 
 int Pet::getHunger() const { return hunger; }

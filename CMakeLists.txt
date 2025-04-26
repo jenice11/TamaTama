@@ -24,10 +24,17 @@ target_sources(${PROJECT_NAME} PRIVATE ${SOURCES} ${HEADERS})
 
 target_include_directories("${PROJECT_NAME}" PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include/")
 
-
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_20)
 
 target_link_libraries(${PROJECT_NAME} PRIVATE sfml-graphics sfml-audio)
+
+set(OPENAL_DLL "${CMAKE_CURRENT_SOURCE_DIR}/thirdparty/openal32.dll")
+
+add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${OPENAL_DLL}"
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>
+)
 
 # Copy assets folder to output directory after build
 add_custom_command(
